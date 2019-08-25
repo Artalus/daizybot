@@ -43,7 +43,7 @@ class Twit:
             f'{self.text}')
 
 def tweets_from_string(html_doc, author):
-    soup = BeautifulSoup(html_doc, 'lxml')
+    soup = BeautifulSoup(html_doc, 'html.parser')
     return (Twit.from_soup(tt, author) for tt in soup.select('div[class*="tweet-text"]'))
 
 def tweets_from_web(author):
