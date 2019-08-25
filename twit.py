@@ -17,7 +17,7 @@ def tag_to_str(x):
     if link[0] == '/':
         link = f'https://twitter.com{link}'
         lf = ' '
-        txt = f'| {x.text.strip()}'
+        txt = f' | {x.text.strip()}'
     if x.name == 'a':
         return '{lf}{}{}{lf}'.format(link, txt, lf=lf)
     return str(x)

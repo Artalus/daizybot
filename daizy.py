@@ -24,19 +24,18 @@ def get_api():
     me = json.load(open('me.json'))
     apikey = me['apikey']
     group = me['group']
-    owner = me['owner']
 
     v = vk.VkApi(token=apikey, api_version='5.101')
     api = v.get_api()
     gid = api.utils.resolveScreenName(screen_name=group)['object_id']
     bot = vkblp.VkBotLongPoll(v, group_id=gid)
-    return bot, v, api, gid, owner
+    return bot, v, api, gid, me
 
-bot, _, api, gid, owner = get_api()
+bot, _, api, gid, me = get_api()
 print(bot)
 print(api)
 print(gid)
-print(owner)
+print(me)
 
 def json_or_default(jfile, default):
     if not os.path.isfile(jfile):
@@ -158,9 +157,10 @@ def new_twits(author: str):
 
 
 def main():
-    for chunk in chunker(subscribers, 20):
-        ss = ', '.join(map(str, chunk))
-        send_to(owner, f'bot online in {ss}')
+    if 'owner' in me:
+        for chunk in chunker(subscribers, 20):
+            ss = ', '.join(map(str, chunk))
+            send_to(me['owner'], f'bot online in {ss}')
 
     while True:
         try:
@@ -172,7 +172,7 @@ def main():
                     add_subscriber(pi)
                     send_to(pi, f'Added to {pi}')
             print('twitter iteration...')
-            for twitch in chunker(new_twits('cnn'), 7):
+            for twitch in chunker(new_twits(me['twitter']), 7):
                 msg = f'\n\n{"-"*10}\n\n'.join(map(str, twitch))
                 for sub in subscribers[:]:
                     send_to(sub, msg)
