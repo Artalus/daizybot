@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+
+from daizy.daizy import main
+
+main()

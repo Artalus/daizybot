@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 import bs4
 import requests
 
-from util import logger
+from daizy.util import logger
 
 
 def tag_to_str(x):

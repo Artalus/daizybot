@@ -11,12 +11,12 @@ import bisect
 import re
 import queue
 import threading
-import twit
 import requests
 import time
 import traceback
 
-from util import init_logger, logger
+import daizy.twit as twit
+from daizy.util import init_logger, logger
 
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
