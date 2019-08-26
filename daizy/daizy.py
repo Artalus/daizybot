@@ -14,6 +14,7 @@ import threading
 import requests
 import time
 import traceback
+import sys
 
 import daizy.twit as twit
 from daizy.util import init_logger, logger
@@ -160,35 +161,38 @@ def new_twits(author: str):
 
 def main():
     init_logger()
-    logger().info('Bot starting')
+    try:
+        logger().info('Bot starting')
 
-    if 'owner' in me:
-        for chunk in chunker(subscribers, 20):
-            ss = ', '.join(map(str, chunk))
-            send_to(me['owner'], f'bot online in {ss}')
+        if 'owner' in me:
+            for chunk in chunker(subscribers, 20):
+                ss = ', '.join(map(str, chunk))
+                send_to(me['owner'], f'bot online in {ss}')
 
-    while True:
-        try:
-            print('vk iteration...')
-            for event in listen_for_messages():
-                logger().debug(event)
-                if is_invitation(event):
-                    pi = event.object.peer_id
-                    add_subscriber(pi)
-                    send_to(pi, f'Added to {pi}')
-            print('twitter iteration...')
-            for twitch in chunker(new_twits(me['twitter']), 7):
-                msg = f'\n\n{"-"*10}\n\n'.join(map(str, twitch))
-                for sub in subscribers[:]:
-                    send_to(sub, msg)
-        except Exception as e:
-            logger().error('SOMETHING HAPPENED:')
-            traceback.print_exc()
-            logger().debug("sleeping...")
-            time.sleep(30)
-
-
-    print("finishing")
+        while True:
+            try:
+                print('vk iteration...')
+                for event in listen_for_messages():
+                    logger().debug(event)
+                    if is_invitation(event):
+                        pi = event.object.peer_id
+                        add_subscriber(pi)
+                        send_to(pi, f'Added to {pi}')
+                print('twitter iteration...')
+                for twitch in chunker(new_twits(me['twitter']), 7):
+                    msg = f'\n\n{"-"*10}\n\n'.join(map(str, twitch))
+                    for sub in subscribers[:]:
+                        send_to(sub, msg)
+            except Exception as e:
+                logger().error('SOMETHING HAPPENED:')
+                logger().error(traceback.format_exc())
+                logger().debug("sleeping...")
+                time.sleep(30)
+        print("finishing")
+    except Exception as e:
+        logger().critical('Daizy terminated with an exception:')
+        logger().critical(traceback.format_exc())
+        sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+        main()
