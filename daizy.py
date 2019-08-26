@@ -16,6 +16,8 @@ import requests
 import time
 import traceback
 
+from util import init_logger, logger
+
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
@@ -67,14 +69,14 @@ subscribers = get_subscribers()
 
 def add_subscriber(peer_id: int):
     if peer_id in subscribers:
-        print(f'{peer_id} already subscribed; ignoring')
+        logger().info(f'{peer_id} already subscribed; ignoring')
         return
     bisect.insort(subscribers, peer_id)
     with open(SUBFILE, 'w') as f:
         json.dump(subscribers, f)
 def remove_subscriber(peer_id: int):
     if peer_id not in subscribers:
-        print(f'{peer_id} not subscribed; ignoring')
+        logger().info(f'{peer_id} not subscribed; ignoring')
         return
     subscribers.remove(peer_id)
     with open(SUBFILE, 'w') as f:
@@ -89,10 +91,10 @@ def send_to(peer_id, message):
             message=message
         )
     except vk.ApiError as e:
-        print(f'Failed to send "{message[:100]}"... to {peer_id}:\n{e.error}')
+        logger().warning(f'Failed to send "{message[:100]}"... to {peer_id}:\n{e.error}')
         if e.code == 7:
-            print('Permission denied, seems like bot was removed from this conversation')
-            print(f'Removing {peer_id} from subscribers')
+            logger().warning('Permission denied, seems like bot was removed from this conversation')
+            logger().warning(f'Removing {peer_id} from subscribers')
             remove_subscriber(peer_id)
 
 COMMAND_RE = re.compile(fr'\[club{gid}\|.+?\] *\/(.+)')
@@ -134,10 +136,10 @@ def last_twit(author: str):
 def update_last_twit(author: str, twid: int):
     write = False
     if author not in last_twits:
-        print(f'No known twits from {author}, adding {twid}')
+        logger().info(f'No known twits from {author}, adding {twid}')
         write = True
     elif twid > last_twits[author]:
-        print(f'{twid} is newer for {author} than {last_twits[author]}, updating')
+        logger().info(f'{twid} is newer for {author} than {last_twits[author]}, updating')
         write = True
     if write:
         last_twits[author] = twid
@@ -157,6 +159,9 @@ def new_twits(author: str):
 
 
 def main():
+    init_logger()
+    logger().info('Bot starting')
+
     if 'owner' in me:
         for chunk in chunker(subscribers, 20):
             ss = ', '.join(map(str, chunk))
@@ -166,7 +171,7 @@ def main():
         try:
             print('vk iteration...')
             for event in listen_for_messages():
-                print(event)
+                logger().debug(event)
                 if is_invitation(event):
                     pi = event.object.peer_id
                     add_subscriber(pi)
@@ -177,9 +182,9 @@ def main():
                 for sub in subscribers[:]:
                     send_to(sub, msg)
         except Exception as e:
-            print('SOMETHING HAPPENED:')
+            logger().error('SOMETHING HAPPENED:')
             traceback.print_exc()
-            print("sleeping...")
+            logger().debug("sleeping...")
             time.sleep(30)
 
 

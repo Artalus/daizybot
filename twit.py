@@ -4,6 +4,8 @@ from bs4 import BeautifulSoup
 import bs4
 import requests
 
+from util import logger
+
 
 def tag_to_str(x):
     if isinstance(x, bs4.element.NavigableString):
@@ -51,8 +53,8 @@ def tweets_from_web(author):
     open('twitter_last.html', 'w').write(content.decode('utf-8'))
     twits = tweets_from_string(content, author)
     if not twits:
-        print('!! SOMETHING BAD HAPPENED WITH TWITTER !!')
-        print('SEE twitter_last.html FILE')
+        logger().error('!! SOMETHING BAD HAPPENED WITH TWITTER !!')
+        logger().error('SEE twitter_last.html FILE')
     return twits
 
 def main():
