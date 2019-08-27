@@ -9,8 +9,6 @@ import os
 import json
 import bisect
 import re
-import queue
-import threading
 import requests
 import time
 import traceback
@@ -157,7 +155,7 @@ def main():
         if 'owner' in me:
             for chunk in chunker(subscribers, 20):
                 ss = ', '.join(map(str, chunk))
-                # send_to(me['owner'], f'bot online in {ss}')
+                send_to(me['owner'], f'bot online in {ss}')
 
         while True:
             try:
@@ -175,10 +173,11 @@ def main():
                             if cmd.startswith('identify'):
                                 proc.identify(cmd.split(' ')[1])
                 print('twitter iteration...')
-                for twitch in chunker(new_twits(me['twitter']), 7):
-                    msg = f'\n\n{"-"*10}\n\n'.join(map(str, twitch))
-                    for sub in subscribers[:]:
-                        send_to(sub, msg)
+                for author in me['twitters']:
+                    for twitch in chunker(new_twits(author), 7):
+                        msg = f'\n\n{"-"*10}\n\n'.join(map(str, twitch))
+                        for sub in subscribers[:]:
+                            send_to(sub, msg)
             except Exception as e:
                 logger().error('SOMETHING HAPPENED:')
                 logger().error(traceback.format_exc())
