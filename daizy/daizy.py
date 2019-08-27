@@ -19,6 +19,8 @@ import sys
 import daizy.twit as twit
 from daizy.util import init_logger, logger
 
+from daizy.commands import CommandProcessor
+
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
@@ -52,18 +54,6 @@ def get_subscribers():
     if x:
         assert isinstance(x[0], int)
     return x
-
-def ensure_subscribers_relevant(subs, chunksize=20):
-    for chunk in chunker(subs, chunksize):
-        cs = len(chunk)
-        x = api.messages.getConversations()
-        if x['count'] != chunksize:
-            if cs == 1:
-                del subs[0]
-            else:
-                c2 = cs//2
-                ensure_subscribers_relevant(subs[:c2], c2)
-                ensure_subscribers_relevant(subs[c2:], c2)
 
 subscribers = get_subscribers()
 
@@ -167,7 +157,7 @@ def main():
         if 'owner' in me:
             for chunk in chunker(subscribers, 20):
                 ss = ', '.join(map(str, chunk))
-                send_to(me['owner'], f'bot online in {ss}')
+                # send_to(me['owner'], f'bot online in {ss}')
 
         while True:
             try:
@@ -178,6 +168,12 @@ def main():
                         pi = event.object.peer_id
                         add_subscriber(pi)
                         send_to(pi, f'Added to {pi}')
+                    else:
+                        proc = CommandProcessor(api, event.object.peer_id)
+                        cmd = try_extract_command(event.object.text)
+                        if cmd:
+                            if cmd.startswith('identify'):
+                                proc.identify(cmd.split(' ')[1])
                 print('twitter iteration...')
                 for twitch in chunker(new_twits(me['twitter']), 7):
                     msg = f'\n\n{"-"*10}\n\n'.join(map(str, twitch))
