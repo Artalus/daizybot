@@ -47,29 +47,34 @@ def json_or_default(jfile, default):
 
 SUBFILE='subscribers.json'
 def get_subscribers():
-    x = json_or_default(SUBFILE, [])
-    assert isinstance(x, list)
+    x = json_or_default(SUBFILE, dict())
+    assert isinstance(x, dict)
     if x:
-        assert isinstance(x[0], int)
+        assert isinstance(next(iter(x.values())), dict)
     return x
 
 subscribers = get_subscribers()
+print(subscribers)
 
 
-def add_subscriber(peer_id: int):
-    if peer_id in subscribers:
-        logger().info(f'{peer_id} already subscribed; ignoring')
+def activate(peer_id: int, adder: int):
+    sp = str(peer_id)
+    if sp in subscribers:
+        logger().info(f'{peer_id} already activated; ignoring')
         return
-    bisect.insort(subscribers, peer_id)
+    subscribers[sp] = {"admins": [adder], "twitters": []}
     with open(SUBFILE, 'w') as f:
-        json.dump(subscribers, f)
-def remove_subscriber(peer_id: int):
-    if peer_id not in subscribers:
-        logger().info(f'{peer_id} not subscribed; ignoring')
+        json.dump(subscribers, f, indent=2)
+    send_to(peer_id, "ok")
+def deactivate(peer_id: int):
+    sp = str(peer_id)
+    if sp not in subscribers:
+        logger().info(f'{peer_id} not activated; ignoring')
         return
-    subscribers.remove(peer_id)
+    del subscribers[sp]
     with open(SUBFILE, 'w') as f:
-        json.dump(subscribers, f)
+        json.dump(subscribers, f, indent=2)
+    send_to(peer_id, "ok")
 
 
 def send_to(peer_id, message):
@@ -83,8 +88,8 @@ def send_to(peer_id, message):
         logger().warning(f'Failed to send "{message[:100]}"... to {peer_id}:\n{e.error}')
         if e.code == 7:
             logger().warning('Permission denied, seems like bot was removed from this conversation')
-            logger().warning(f'Removing {peer_id} from subscribers')
-            remove_subscriber(peer_id)
+            logger().warning(f'Deactivating {peer_id}')
+            deactivate(peer_id)
 
 COMMAND_RE = re.compile(fr'\[club{gid}\|.+?\] *\/(.+)')
 def try_extract_command(msg):
@@ -132,7 +137,7 @@ def update_last_twit(author: str, twid: int):
         write = True
     if write:
         last_twits[author] = twid
-        json.dump(last_twits, open('last_twits.json', 'w'))
+        json.dump(last_twits, open('last_twits.json', 'w'), indent=2)
 
 
 def new_twits(author: str):
@@ -146,6 +151,11 @@ def new_twits(author: str):
         update_last_twit(author, twits[0].twid)
     return twits
 
+def all_twitters(subscribers):
+    for s in subscribers.values():
+        for t in s['twitters']:
+            yield t
+
 
 def main():
     init_logger()
@@ -153,7 +163,7 @@ def main():
         logger().info('Bot starting')
 
         if 'owner' in me:
-            for chunk in chunker(subscribers, 20):
+            for chunk in chunker(list(subscribers.keys()), 20):
                 ss = ', '.join(map(str, chunk))
                 send_to(me['owner'], f'bot online in {ss}')
 
@@ -164,7 +174,7 @@ def main():
                     logger().debug(event)
                     if is_invitation(event):
                         pi = event.object.peer_id
-                        add_subscriber(pi)
+                        activate(pi)
                         send_to(pi, f'Added to {pi}')
                     else:
                         proc = CommandProcessor(api, event.object.peer_id)
@@ -173,10 +183,10 @@ def main():
                             if cmd.startswith('identify'):
                                 proc.identify(cmd.split(' ')[1])
                 print('twitter iteration...')
-                for author in me['twitters']:
-                    for twitch in chunker(new_twits(author), 7):
-                        msg = f'\n\n{"-"*10}\n\n'.join(map(str, twitch))
-                        for sub in subscribers[:]:
+                for author in all_twitters(subscribers):
+                    for twit in chunker(new_twits(author), 7):
+                        msg = f'\n\n{"-"*10}\n\n'.join(map(str, twit))
+                        for sub in list(subscribers.keys()):
                             send_to(sub, msg)
             except Exception as e:
                 logger().error('SOMETHING HAPPENED:')
