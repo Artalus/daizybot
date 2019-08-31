@@ -19,6 +19,8 @@ from daizy.util import init_logger, logger
 
 from daizy.commands import CommandProcessor
 
+BIRB='\U0001F426'
+
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
@@ -76,13 +78,40 @@ def deactivate(peer_id: int):
         json.dump(subscribers, f, indent=2)
     send_to(peer_id, "ok")
 
+def subscribe(peer_id: int, twitter: str):
+    sp = str(peer_id)
+    if sp not in subscribers:
+        logger().info(f'{peer_id} not activated; ignoring')
+        return
+    ts = subscribers[sp]['twitters']
+    if twitter in ts:
+        logger().info(f'{peer_id} already subscribed to {twitter}; ignoring')
+        return
+    ts.append(twitter)
+    with open(SUBFILE, 'w') as f:
+        json.dump(subscribers, f, indent=2)
+    send_to(peer_id, "ok")
+def unsubscribe(peer_id: int, twitter: str):
+    sp = str(peer_id)
+    if sp not in subscribers:
+        logger().info(f'{peer_id} not activated; ignoring')
+        return
+    ts = subscribers[sp]['twitters']
+    if twitter not in ts:
+        logger().info(f'{peer_id} not subscribed to {twitter}; ignoring')
+        return
+    ts.remove(twitter)
+    with open(SUBFILE, 'w') as f:
+        json.dump(subscribers, f, indent=2)
+    send_to(peer_id, "ok")
+
 
 def send_to(peer_id, message):
     try:
         api.messages.send(
             peer_id=peer_id,
             random_id=get_random_id(),
-            message=message
+            message=f'{BIRB} {message}'
         )
     except vk.ApiError as e:
         logger().warning(f'Failed to send "{message[:100]}"... to {peer_id}:\n{e.error}')
@@ -96,14 +125,6 @@ def try_extract_command(msg):
     x = COMMAND_RE.search(msg)
     if x:
         return x.group(1)
-
-def is_invitation(event):
-    if 'action' in event.object and event.object.action['type'] == 'chat_invite_user':
-        return True
-    cmd = try_extract_command(event.object.text)
-    if cmd and cmd == 'start':
-        return True
-    return False
 
 
 def listen_for_messages():
@@ -157,6 +178,36 @@ def all_twitters(subscribers):
             yield t
 
 
+def bot_iteration():
+    print('vk iteration...')
+    for event in listen_for_messages():
+        logger().debug(event)
+        proc = CommandProcessor(api, event.object.peer_id)
+        cmd = try_extract_command(event.object.text)
+        if not cmd:
+            continue
+        pi = event.object.peer_id
+        cmd, *args = cmd.split(' ')
+        if cmd == 'identify':
+            proc.identify(args[0])
+        elif cmd == 'start':
+            activate(pi, event.object.from_id)
+        elif cmd == 'stop':
+            deactivate(pi)
+        elif cmd == 'subscribe':
+            for a in args:
+                subscribe(pi, a)
+        elif cmd == 'unsubscribe':
+            for a in args:
+                unsubscribe(pi, a)
+    print('twitter iteration...')
+    for author in all_twitters(subscribers):
+        for twit in chunker(new_twits(author), 7):
+            msg = f'\n\n{"-"*10}\n\n'.join(map(str, twit))
+            for sub, data in subscribers.items():
+                if author in data['twitters']:
+                    send_to(sub, msg)
+
 def main():
     init_logger()
     try:
@@ -169,25 +220,7 @@ def main():
 
         while True:
             try:
-                print('vk iteration...')
-                for event in listen_for_messages():
-                    logger().debug(event)
-                    if is_invitation(event):
-                        pi = event.object.peer_id
-                        activate(pi)
-                        send_to(pi, f'Added to {pi}')
-                    else:
-                        proc = CommandProcessor(api, event.object.peer_id)
-                        cmd = try_extract_command(event.object.text)
-                        if cmd:
-                            if cmd.startswith('identify'):
-                                proc.identify(cmd.split(' ')[1])
-                print('twitter iteration...')
-                for author in all_twitters(subscribers):
-                    for twit in chunker(new_twits(author), 7):
-                        msg = f'\n\n{"-"*10}\n\n'.join(map(str, twit))
-                        for sub in list(subscribers.keys()):
-                            send_to(sub, msg)
+                bot_iteration()
             except Exception as e:
                 logger().error('SOMETHING HAPPENED:')
                 logger().error(traceback.format_exc())
