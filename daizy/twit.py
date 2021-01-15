@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 
-import time
+from typing import *
 
 from selenium import webdriver
 from selenium.webdriver.remote.webdriver import WebDriver as RemoteWebDriver
 from selenium.webdriver.remote.webelement import WebElement as RemoteWebElement
+
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
 
 from daizy.util import logger
 
@@ -78,10 +83,9 @@ def is_pinned_article(article: RemoteWebElement):
         return False
     return True
 
-def tweets_from_driver(driver: RemoteWebDriver, author: str):
-    articles = driver.find_elements_by_tag_name('article')
-    posts = [x for x in articles if get_status(x, author) and not is_pinned_article(x)]
-    return [Twit.from_selenium_element(p, author) for p in posts]
+def tweets_from_driver(articles: Sequence[RemoteWebElement], author: str):
+    posts = (x for x in articles if get_status(x, author) and not is_pinned_article(x))
+    return sorted([Twit.from_selenium_element(p, author) for p in posts], key=lambda x: x.twid, reverse=True)
 
 class Scrapper:
     def __init__(self):
@@ -91,35 +95,48 @@ class Scrapper:
         chrome_options.add_argument("--no-sandbox")
         self.driver: RemoteWebDriver = webdriver.Chrome(chrome_options=chrome_options)
 
-    def scroll(self):
-        SCROLL_PAUSE_TIME = 0.5
-        # Get scroll height
-        last_height = self.driver.execute_script("return document.body.scrollHeight")
-
-        for i in range(5):
-            # Scroll down to bottom
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            # Wait to load page
-            time.sleep(SCROLL_PAUSE_TIME)
-            # Calculate new scroll height and compare with last scroll height
-            new_height = self.driver.execute_script("return document.body.scrollHeight")
-            if new_height == last_height:
+    def scroll(self, step: int):
+        driver = self.driver
+        total_articles = set(driver.find_elements_by_tag_name("article"))
+        for x in total_articles:
+            yield x
+        expected_len = 20
+        for i in range(10):
+            driver.execute_script(f"window.scrollTo(0,{step})", "")
+            try:
+                WebDriverWait(driver, 20).until(EC.visibility_of_all_elements_located((By.TAG_NAME, "article")))
+                articles = set(driver.find_elements_by_tag_name("article"))
+                new_articles = articles.difference(total_articles)
+                for x in new_articles:
+                    yield x
+                    total_articles.add(x)
+                    if len(total_articles) >= expected_len:
+                        break
+            except TimeoutException:
                 break
-            last_height = new_height
 
     def tweets_from_web(self, author):
+        W = 1920
+        H = 1080
+        self.driver.set_window_size(W, H)
         self.driver.get(f'https://mobile.twitter.com/{author}')
-        self.scroll()
+        articles = self.scroll(H)
         open('twitter_last.html', 'wb').write(self.driver.page_source.encode())
-        twits = tweets_from_driver(self.driver, author)
+        twits = tweets_from_driver(articles, author)
         if not twits:
             logger().error('!! SOMETHING BAD HAPPENED WITH TWITTER !!')
             logger().error('SEE twitter_last.html FILE')
         return twits
 
 def main():
+    from time import time
+    t1 = time()
     s = Scrapper()
+    t2 = time()
     tweets = s.tweets_from_web('DayZ')
+    t3 = time()
     for twit in tweets:
         print(twit)
         print('-'*20)
+    print(f'scrapper created in {t2-t1}')
+    print(f'tweets acquired in {t3-t2}')
